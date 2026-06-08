@@ -23,7 +23,6 @@ const orderRoutes = require("./routes/orders");
 const userRoutes = require("./routes/users");
 const reviewRoutes = require("./routes/reviews");
 const couponRoutes = require("./routes/coupons");
-// const paymentRoutes = require('./routes/payments'); //TO DO: Uncomment this when we have the payment routes
 const bannerRoutes = require("./routes/banners");
 const uploadRoutes = require("./routes/uploads");
 const dashboardRoutes = require("./routes/dashboard");
@@ -34,34 +33,66 @@ connectDB();
 
 const app = express();
 
-// Security headers — allow cross-origin image loading for uploads
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
-}));
+/* =========================
+   SECURITY HEADERS
+========================= */
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
 
-// CORS
+/* =========================
+   CORS FIX (IMPORTANT)
+========================= */
 const allowedOrigins = [
   process.env.WEBSITE_URL,
   process.env.ADMIN_URL,
   "http://localhost:3000",
   "http://localhost:3001",
-];
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true,
-  }),
-);
+].filter(Boolean);
 
-// Rate limiting
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow mobile apps / server-to-server
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      console.log("❌ CORS BLOCKED:", origin);
+      return callback(null, false);
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+
+app.use(cors(corsOptions));
+
+// 🔥 MUST handle preflight requests
+app.options("*", cors(corsOptions));
+
+// 🔥 extra fallback (fix nginx / proxy issues)
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
+
+/* =========================
+   RATE LIMITING
+========================= */
 const limiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 minutes
+  windowMs: 10 * 60 * 1000,
   max: 200,
   message: {
     success: false,
@@ -70,24 +101,30 @@ const limiter = rateLimit({
 });
 app.use("/api", limiter);
 
-// Stripe webhook needs raw body BEFORE json parser
+/* =========================
+   STRIPE WEBHOOK RAW BODY
+========================= */
 app.use(
   "/api/payments/stripe/webhook",
   express.raw({ type: "application/json" }),
 );
 
-// Body parsers
+/* =========================
+   BODY PARSERS
+========================= */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
-// Sanitize MongoDB queries
+/* =========================
+   SANITIZE + COMPRESSION
+========================= */
 app.use(mongoSanitize());
-
-// Compression
 app.use(compression());
 
-// Logging
+/* =========================
+   LOGGING
+========================= */
 if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
 } else {
@@ -98,16 +135,23 @@ if (process.env.NODE_ENV === "development") {
   );
 }
 
-// Static uploads — absolute path, 30-day cache, cross-origin accessible
-app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
-  maxAge: '30d',
-  setHeaders: (res) => {
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
-  },
-}));
+/* =========================
+   STATIC FILES
+========================= */
+app.use(
+  "/uploads",
+  express.static(path.join(__dirname, "../uploads"), {
+    maxAge: "30d",
+    setHeaders: (res) => {
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
+    },
+  }),
+);
 
-// Health check
+/* =========================
+   HEALTH CHECK
+========================= */
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",
@@ -116,7 +160,9 @@ app.get("/health", (req, res) => {
   });
 });
 
-// API Routes
+/* =========================
+   API ROUTES
+========================= */
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
@@ -124,29 +170,39 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/coupons", couponRoutes);
-// app.use("/api/payments", paymentRoutes); //TO DO: Uncomment this when we have the payment routes
 app.use("/api/banners", bannerRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/newsletter", newsletterRoutes);
 app.use("/api/settings", settingsRoutes);
 
-// 404 handler
+/* =========================
+   404 HANDLER
+========================= */
 app.use((req, res) => {
-  res
-    .status(404)
-    .json({ success: false, message: `Route ${req.originalUrl} not found` });
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.originalUrl} not found`,
+  });
 });
 
-// Global error handler
+/* =========================
+   GLOBAL ERROR HANDLER
+========================= */
 app.use(errorHandler);
 
+/* =========================
+   SERVER START
+========================= */
 const PORT = process.env.PORT || 5000;
+
 const server = app.listen(PORT, () => {
   logger.info(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });
 
-// Handle unhandled promise rejections
+/* =========================
+   PROCESS HANDLERS
+========================= */
 process.on("unhandledRejection", (err) => {
   logger.error(`Unhandled Rejection: ${err.message}`);
   server.close(() => process.exit(1));
