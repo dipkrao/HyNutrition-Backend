@@ -32,4 +32,5 @@ exports.bannerUpload = multer({ storage: storage('banners'), fileFilter, limits 
 exports.generalUpload = multer({ storage: storage('general'), fileFilter, limits });
 exports.productUpload = multer({ storage: storage('products'), fileFilter, limits });
 exports.categoryUpload = multer({ storage: storage('categories'), fileFilter, limits });
+exports.blogUpload = multer({ storage: storage('blogs'), fileFilter, limits });
 exports.UPLOADS_ROOT = UPLOADS_ROOT;

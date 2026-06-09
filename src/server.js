@@ -28,6 +28,7 @@ const uploadRoutes = require("./routes/uploads");
 const dashboardRoutes = require("./routes/dashboard");
 const newsletterRoutes = require("./routes/newsletter");
 const settingsRoutes = require("./routes/settings");
+const blogRoutes = require("./routes/blogs");
 
 connectDB();
 
@@ -175,6 +176,7 @@ app.use("/api/uploads", uploadRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/newsletter", newsletterRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/blogs", blogRoutes);
 
 /* =========================
    404 HANDLER
