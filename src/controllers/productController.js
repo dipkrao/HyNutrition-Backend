@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const path = require('path');
 const fs = require('fs');
@@ -57,10 +58,13 @@ exports.getProducts = async (req, res, next) => {
 // @route   GET /api/products/:slug
 exports.getProduct = async (req, res, next) => {
   try {
-    const product = await Product.findOne({
-      $or: [{ slug: req.params.slug }, { _id: req.params.slug }],
-      isActive: true,
-    }).populate('category', 'name slug');
+    const { slug } = req.params;
+    const isObjectId = mongoose.Types.ObjectId.isValid(slug) && slug.length === 24;
+    const query = isObjectId
+      ? { $or: [{ slug }, { _id: slug }], isActive: true }
+      : { slug, isActive: true };
+
+    const product = await Product.findOne(query).populate('category', 'name slug');
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
     res.status(200).json({ success: true, product });
   } catch (err) { next(err); }
@@ -180,7 +184,11 @@ exports.getBestSellers = async (req, res, next) => {
 // @route   GET /api/products/:id/related
 exports.getRelated = async (req, res, next) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid product id' });
+    }
+    const product = await Product.findById(id);
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
     const related = await Product.find({ category: product.category, _id: { $ne: product._id }, isActive: true }).limit(4);
     res.status(200).json({ success: true, products: related });

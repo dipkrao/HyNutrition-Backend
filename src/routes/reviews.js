@@ -43,6 +43,17 @@ router.get('/pending', protect, authorize('admin', 'superadmin'), async (req, re
   } catch (e) { next(e); }
 });
 
+// Admin: get approved reviews
+router.get('/approved', protect, authorize('admin', 'superadmin'), async (req, res, next) => {
+  try {
+    const reviews = await Review.find({ isApproved: true })
+      .populate('user', 'name email')
+      .populate('product', 'name')
+      .sort({ createdAt: -1 });
+    res.json({ success: true, reviews });
+  } catch (e) { next(e); }
+});
+
 // Admin: approve / reject review
 router.put('/:id', protect, authorize('admin', 'superadmin'), async (req, res, next) => {
   try {
